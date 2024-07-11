@@ -110,7 +110,6 @@
                     );
                     this.playerInventory = new Room("Inventory", "Your personal inventory", []);
                     this.currentRoom = this.rooms[config.starting_room];
-                    this.ollama = new OllamaApiWrapper('llama3:latest');
                 }
 
                 move(direction) {
@@ -163,6 +162,7 @@
                         'nw': 'northwest', 'sw': 'southwest', 'se': 'southeast', 'ne': 'northeast',
                         'u': 'up', 'd': 'down', 'in': 'inside', 'out': 'outside'
                     };
+                    this.ollama = new OllamaApiWrapper('llama3:latest');
                 }
 
                 async parseCommand(userInput) {
@@ -231,9 +231,13 @@
                 }
 
                 async generateSceneDescription() {
-                    // This method would call the LLM API to generate a detailed description
-                    // For now, we'll return a placeholder
-                    return `You are in ${this.gameState.currentRoom.shortDescription}. ${this.gameState.currentRoom.longDescriptionPrompt}`;
+                    const prompt = `Describe the following scene in detail: ${this.gameState.currentRoom.longDescriptionPrompt}`;
+                    try {
+                        return await this.ollama.generateResponse(prompt);
+                    } catch (error) {
+                        console.error('Error generating scene description:', error);
+                        return this.gameState.currentRoom.shortDescription;
+                    }
                 }
 
                 generateSceneGraphic() {
