@@ -222,10 +222,18 @@
                     return `${longDescription}\n\nYou can see: ${itemDescriptions}`;
                 }
 
-                examine(itemName) {
+                async generateItemDescription(item) {
+                    if (item) {
+                        return await this.ollama.generateResponse(item.longDescriptionPrompt);
+                    }
+                    return `You don't see any such thing here.`;
+                }
+
+                async examine(itemName) {
                     const item = this.gameState.items[itemName];
                     if (item && (this.gameState.currentRoom.items.includes(itemName) || this.gameState.playerInventory.items.includes(itemName))) {
-                        return item.shortDescription;
+                        console.log('Generating item description...');
+                        return this.generateItemDescription(item);
                     }
                     return `You don't see any ${itemName} here.`;
                 }
