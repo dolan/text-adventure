@@ -116,6 +116,10 @@
                 name: 'Antique Lantern',
                 promptDescription: 'A brass lantern that seems to still have some oil in it.',
             },
+            rug: {
+                name: 'Tattered Rug',
+                promptDescription: 'A worn rug with faded patterns.',
+            }
         };
 
         // Game rooms
@@ -126,7 +130,8 @@
             },
             hallway: {
                 promptDescription: "A long hallway with creaky floorboards. There's a door to the south and a staircase leading up.",
-                exits: { south: 'start', up: 'attic' }
+                exits: { south: 'start', up: 'attic' },
+                items: ['rug']
             },
             garden: {
                 promptDescription: "An overgrown garden with various plants and flowers. There's a shed to the north and you can go back west.",
@@ -143,6 +148,10 @@
                 exits: { down: 'hallway' },
                 locked: true,
                 items: ['book']
+            },
+            basement: {
+                promptDescription: "A dark, damp basement with a musty smell. There's a flickering lightbulb overhead.",
+                exits: { up: 'hallway' }
             }
         };
 
@@ -201,12 +210,22 @@
                     return `You are carrying: ${inventory.map(item => items[item].name).join(', ')}`;
                 }
             },
+            move: (object) => {
+                if (object === 'rug' && currentRoom === 'hallway') {
+                    rooms.hallway.exits.down = 'basement';
+                    rooms.hallway.items = rooms.hallway.items.filter(i => i !== 'rug');
+                    return "You lift the rug and find a trapdoor underneath.";
+                } else {
+                    return "You can't move that."
+                }
+            },
             use: (itemName) => {
                 const item = inventory.find(i => i.toLowerCase() === itemName.toLowerCase());
                 if (item === 'key' && currentRoom === 'hallway') {
                     rooms.attic.locked = false;
                     return "You use the key to unlock the attic door.";
-                } else {
+                }
+                else {
                     return "You can't use that here.";
                 }
             }
