@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Adventure Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            width: 80%;
+            max-width: 600px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        #text-pane {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+
+            /* make text wrap and respect line breaks */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #input-area {
+            display: flex;
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 5px;
+        }
+        #submit-button {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="text-pane"></div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Enter your command...">
+            <button id="submit-button">Submit</button>
+        </div>
+    </div>
+
+    <script>
+        // Ollama API wrapper functions
+        async function generateItemDescription(item) {
+            const prompt = `Describe the item "${item}" briefly. The description should be in the second person, as if addressing the player directly. Keep it concise.`;
+            return await generateOllamaResponse(prompt);
+        }
+
+        async function generateRoomDescription(room, prompt, item_names = []) {
+            const fullPrompt = `Describe the following room briefly: "${room}". ${prompt} The description should be in the second person, as if addressing the player directly. Keep it concise.`;
+            const response = await generateOllamaResponse(fullPrompt);
+            if (item_names.length > 0) {
+                return `${response}\n\n You see: ${item_names.join(', ')}`;
+            } else {
+                return response;
+            }
+        }
+
+        async function generateOllamaResponse(prompt) {
+            const response = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'llama3:latest',
+                    prompt: prompt,
+                    max_tokens: 250,
+                    temperature: 0.7,
+                    stream: false
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.response;
+        }
+
+        // Game state
+        let currentRoom = 'start';
+        const inventory = [];
+
+        // List of items
+        const items = {
+            key: {
+                name: 'Rusty Key',
+                promptDescription: 'An old, rusty key with intricate engravings.',
+            },
+            book: {
+                name: 'Mysterious Book',
+                promptDescription: 'A leather-bound book with strange symbols on its cover.',
+            },
+            lantern: {
+                name: 'Antique Lantern',
+                promptDescription: 'A brass lantern that seems to still have some oil in it.',
+            },
+        };
+
+        // Game rooms
+        const rooms = {
+            start: {
+                promptDescription: "A dimly lit room with a musty smell. There's a door to the north and a window to the east.",
+                exits: { north: 'hallway', east: 'garden' }
+            },
+            hallway: {
+                promptDescription: "A long hallway with creaky floorboards. There's a door to the south and a staircase leading up.",
+                exits: { south: 'start', up: 'attic' }
+            },
+            garden: {
+                promptDescription: "An overgrown garden with various plants and flowers. There's a shed to the north and you can go back west.",
+                exits: { north: 'shed', west: 'start' },
+                items: ['key']
+            },
+            shed: {
+                promptDescription: "A small, wooden shed filled with old gardening tools and cobwebs.",
+                exits: { south: 'garden' },
+                items: ['lantern']
+            },
+            attic: {
+                promptDescription: "A dusty attic with slanted ceilings and a small, round window. There's a locked chest in the corner.",
+                exits: { down: 'hallway' },
+                locked: true,
+                items: ['book']
+            }
+        };
+
+
+        function getItemNames(roomObject){
+
+            if (!roomObject.items ||
+                roomObject.items.length == 0) {
+                return [];
+            }
+
+            const itemNames = roomObject.items.map(item => items[item].name);
+            console.log(itemNames);
+            return itemNames;
+        }
+
+        // Game commands
+        const commands = {
+            go: (direction) => {
+                const exits = rooms[currentRoom].exits;
+                if (exits[direction]) {
+                    if (exits[direction] === 'attic' && rooms.attic.locked) {
+                        return "The attic door is locked. You need a key to unlock it.";
+                    }
+                    currentRoom = exits[direction];
+                    return generateRoomDescription(currentRoom, rooms[currentRoom].promptDescription, getItemNames(rooms[currentRoom]));
+                } else {
+                    return "You can't go that way.";
+                }
+            },
+            look: () => generateRoomDescription(currentRoom, rooms[currentRoom].promptDescription, getItemNames(rooms[currentRoom])),
+            examine: async (itemName) => {
+                const item = inventory.find(i => i.toLowerCase() === itemName.toLowerCase()) || 
+                             (rooms[currentRoom].items && rooms[currentRoom].items.find(i => i.toLowerCase() === itemName.toLowerCase()));
+                if (item) {
+                    return generateItemDescription(items[item].name);
+                } else {
+                    return `There's no ${itemName} here to examine.`;
+                }
+            },
+            take: (itemName) => {
+                const roomItems = rooms[currentRoom].items;
+                const item = roomItems && roomItems.find(i => i.toLowerCase() === itemName.toLowerCase());
+                if (item) {
+                    inventory.push(item);
+                    rooms[currentRoom].items = roomItems.filter(i => i !== item);
+                    return `You take the ${items[item].name}.`;
+                } else {
+                    return `There's no ${itemName} here to take.`;
+                }
+            },
+            inventory: () => {
+                if (inventory.length === 0) {
+                    return "Your inventory is empty.";
+                } else {
+                    return `You are carrying: ${inventory.map(item => items[item].name).join(', ')}`;
+                }
+            },
+            use: (itemName) => {
+                const item = inventory.find(i => i.toLowerCase() === itemName.toLowerCase());
+                if (item === 'key' && currentRoom === 'hallway') {
+                    rooms.attic.locked = false;
+                    return "You use the key to unlock the attic door.";
+                } else {
+                    return "You can't use that here.";
+                }
+            }
+        };
+
+        // Game logic
+        async function processCommand(input) {
+            const [command, ...args] = input.toLowerCase().split(' ');
+            if (commands[command]) {
+                const result = await commands[command](...args);
+                return result;
+            } else {
+                return "I don't understand that command.";
+            }
+        }
+
+        // UI elements
+        const textPane = document.getElementById('text-pane');
+        const userInput = document.getElementById('user-input');
+        const submitButton = document.getElementById('submit-button');
+
+        // Display text in the game
+        function displayText(text) {
+            textPane.innerHTML += `<p>${text}</p>`;
+            textPane.scrollTop = textPane.scrollHeight;
+        }
+
+        // Handle user input
+        async function handleInput() {
+            const input = userInput.value.trim();
+            if (input) {
+                displayText(`> ${input}`);
+                const response = await processCommand(input);
+                displayText(response);
+                userInput.value = '';
+            }
+        }
+
+        // Event listeners
+        submitButton.addEventListener('click', handleInput);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleInput();
+            }
+        });
+
+        // Initialize the game
+        (async function() {
+            displayText("Welcome to the Text Adventure Game!");
+            const initialDescription = await generateRoomDescription(currentRoom, rooms[currentRoom].promptDescription);
+            displayText(initialDescription);
+        })();
+    </script>
+</body>
+</html>
