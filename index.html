@@ -53,7 +53,7 @@
     <div id="game-container">
         <div id="text-pane"></div>
         <div id="input-area">
-            <input type="text" id="user-input" placeholder="Enter your command...">
+            <input type="text" id="user-input" autocomplete="off" placeholder="Enter your command...">
             <button id="submit-button">Submit</button>
         </div>
     </div>
@@ -61,15 +61,15 @@
     <script>
         // Ollama API wrapper functions
         async function generateItemDescription(item) {
-            const prompt = `Describe the item "${item}" briefly. The description should be in the second person, as if addressing the player directly. Keep it concise.`;
+            const prompt = `Briefly describe the item "${item}" briefly. The description should be in the second person, as if addressing the player directly. Keep it concise.`;
             return await generateOllamaResponse(prompt);
         }
 
-        async function generateRoomDescription(room, prompt, item_names = []) {
+        async function generateRoomDescription(room, room_name, prompt, item_names = []) {
             const fullPrompt = `Describe the following room briefly: "${room}". ${prompt} The description should be in the second person, as if addressing the player directly. Keep it concise.`;
             const response = await generateOllamaResponse(fullPrompt);
             if (item_names.length > 0) {
-                return `${response}\n\n You see: ${item_names.join(', ')}`;
+                return `<b>${room_name}</b>\n\n${response}\n\n You see: ${item_names.join(', ')}`;
             } else {
                 return response;
             }
@@ -106,14 +106,15 @@
         const items = {
             key: {
                 name: 'Rusty Key',
-                promptDescription: 'An old, rusty key with intricate engravings.',
+                promptDescription: 'An old, rusty key with intricate engravings. Use it to unlock something.',
             },
             book: {
                 name: 'Mysterious Book',
-                promptDescription: 'A leather-bound book with strange symbols on its cover.',
+                promptDescription: 'A leather-bound book with strange symbols on its cover. Only readable words are "Drink more ovaltine." in ancient script.',
             },
             lantern: {
                 name: 'Antique Lantern',
+                lit: false,
                 promptDescription: 'A brass lantern that seems to still have some oil in it.',
             },
             rug: {
@@ -125,31 +126,37 @@
         // Game rooms
         const rooms = {
             start: {
+                name: 'Dimly Lit Room', // 'Start'
                 promptDescription: "A dimly lit room with a musty smell. There's a door to the north and a window to the east.",
                 exits: { north: 'hallway', east: 'garden' }
             },
             hallway: {
+                name: 'Creepy Hallway',
                 promptDescription: "A long hallway with creaky floorboards. There's a door to the south and a staircase leading up.",
                 exits: { south: 'start', up: 'attic' },
                 items: ['rug']
             },
             garden: {
+                name: 'Overgrown Garden',
                 promptDescription: "An overgrown garden with various plants and flowers. There's a shed to the north and you can go back west.",
                 exits: { north: 'shed', west: 'start' },
                 items: ['key']
             },
             shed: {
+                name: 'Garden Shed',
                 promptDescription: "A small, wooden shed filled with old gardening tools and cobwebs.",
                 exits: { south: 'garden' },
                 items: ['lantern']
             },
             attic: {
+                name: 'Dusty Attic',
                 promptDescription: "A dusty attic with slanted ceilings and a small, round window. There's a locked chest in the corner.",
                 exits: { down: 'hallway' },
                 locked: true,
                 items: ['book']
             },
             basement: {
+                name: 'Dark Basement',
                 promptDescription: "A dark, damp basement with a musty smell. There's a flickering lightbulb overhead.",
                 dark: true,
                 exits: { up: 'hallway' }
@@ -165,7 +172,6 @@
             }
 
             const itemNames = roomObject.items.map(item => items[item].name);
-            console.log(itemNames);
             return itemNames;
         }
 
@@ -178,17 +184,17 @@
                         return "The attic door is locked. You need a key to unlock it.";
                     }
                     currentRoom = exits[direction];
-                    return generateRoomDescription(currentRoom, `Describe as if arriving as the scene is coming into view: ${rooms[currentRoom].promptDescription}`, getItemNames(rooms[currentRoom]));
+                    return generateRoomDescription(currentRoom, rooms[currentRoom].name, `Describe as if arriving as the scene is coming into view: ${rooms[currentRoom].promptDescription}. Use tone: witty but not too funny. Be informative.`, getItemNames(rooms[currentRoom]));
                 } else {
                     return "You can't go that way.";
                 }
             },
-            look: () => generateRoomDescription(currentRoom, rooms[currentRoom].promptDescription, getItemNames(rooms[currentRoom])),
+            look: () => generateRoomDescription(currentRoom, rooms[currentRoom].name, `${rooms[currentRoom].promptDescription}. Use tone: smartly sarcastic`, getItemNames(rooms[currentRoom])),
             examine: async (itemName) => {
                 const item = inventory.find(i => i.toLowerCase() === itemName.toLowerCase()) || 
                              (rooms[currentRoom].items && rooms[currentRoom].items.find(i => i.toLowerCase() === itemName.toLowerCase()));
                 if (item) {
-                    return generateItemDescription(items[item].name);
+                    return generateItemDescription(`${items[item].name}. Use tone: smartly flippant`);
                 } else {
                     return `There's no ${itemName} here to examine.`;
                 }
@@ -250,6 +256,8 @@
         // Game logic
         async function processCommand(input) {
             const [initial_command, ...initial_args] = input.toLowerCase().split(' ');
+
+            let command, args;
 
             if (DIRECTIONS.includes(initial_command)) {
                 command = 'go';
@@ -313,7 +321,7 @@
         // Initialize the game
         (async function() {
             displayText("Welcome to the Text Adventure Game!");
-            const initialDescription = await generateRoomDescription(currentRoom, rooms[currentRoom].promptDescription);
+            const initialDescription = await generateRoomDescription(currentRoom, rooms[currentRoom].name, rooms[currentRoom].promptDescription);
             displayText(initialDescription);
         })();
     </script>
