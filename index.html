@@ -194,12 +194,18 @@
                     if (rooms[currentRoom].dark && !illuminated) {
                         base_prompt += " It's too dark to see anything.";
                     }
-                    return generateRoomDescription(currentRoom, rooms[currentRoom].name, `Describe as if arriving as the scene is coming into view: ${rooms[currentRoom].promptDescription}. ${personality}`, getItemNames(rooms[currentRoom]));
+                    return generateRoomDescription(currentRoom, rooms[currentRoom].name, `Describe as if arriving as the scene is coming into view: ${base_prompt}. ${personality}`, getItemNames(rooms[currentRoom]));
                 } else {
                     return "You can't go that way.";
                 }
             },
-            look: () => generateRoomDescription(currentRoom, rooms[currentRoom].name, `${rooms[currentRoom].promptDescription}. ${personality}`, getItemNames(rooms[currentRoom])),
+            look: () => {
+                let base_prompt = rooms[currentRoom].promptDescription;
+                if (rooms[currentRoom].dark && !illuminated) {
+                    base_prompt += " It's too dark to see anything.";
+                }
+                return generateRoomDescription(currentRoom, rooms[currentRoom].name, `${base_prompt}. ${personality}`, getItemNames(rooms[currentRoom]))
+            },
             examine: async (itemName) => {
                 const item = inventory.find(i => i.toLowerCase() === itemName.toLowerCase()) || 
                              (rooms[currentRoom].items && rooms[currentRoom].items.find(i => i.toLowerCase() === itemName.toLowerCase()));
@@ -261,20 +267,24 @@
                             'down', 'n', 's', 'e', 
                             'w', 'u', 'd'];
 
-        const ALIASES = {
-            "turn on": "use",
-            "turn off": "use",
-            "light": "use",
-            "unlight": "use",
-            "pick up": "take",
-            "grab": "take",
-            "get": "take",
-            "steal": "take",
-            "look at": "examine",
-            "inspect": "examine",
-            "read": "examine",
-            "invent": "inventory",
-        };
+        const ALIASES = [
+            [/turn on\b/g, "use"],
+            [/turn off\b/g, "use"],
+            [/light\b/g, "use"],
+            [/unlight\b/g, "use"],
+            [/pick up\b/g, "take"],
+            [/grab\b/g, "take"],
+            [/get\b/g, "take"],
+            [/steal\b/g, "take"],
+            [/look at\b/g, "examine"],
+            [/inspect\b/g, "examine"],
+            [/read\b/g, "examine"],
+            [/invent\b/g, "inventory"],
+            [/lamp\b/g, "lantern"],
+            [/the\b/g, ""],
+            [/a\b/g, ""],
+            [/a\b/g, ""],
+    ];
 
         const ABBREV = {
             n: 'north',
@@ -293,11 +303,11 @@
         // Game logic
         async function processCommand(unaliased) {
             input = unaliased.toLowerCase()
-            for (const [alias, command] of Object.entries(ALIASES)) {
+            for (const [alias, command] of ALIASES) {
                 input = input.replace(alias, command);
             }
 
-            const [initial_command, ...initial_args] = input.toLowerCase().split(' ');
+            const [initial_command, ...initial_args] = input.toLowerCase().split(' ').filter(i => i !== '');
 
             let command, args;
 
