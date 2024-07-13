@@ -66,6 +66,10 @@
         }
 
         async function generateRoomDescription(room, room_name, prompt, item_names = []) {
+            
+            // debug, no LLM
+            // return "<b>" + room_name + "</b>\n\n" + prompt + (item_names.length > 0 ? "\n\nYou see: " + item_names.join(', ') + " here." : ""); 
+
             const fullPrompt = `Describe the following room briefly: "${room}". ${prompt} The description should be in the second person, as if addressing the player directly. Keep it concise.`;
             const response = await generateOllamaResponse(fullPrompt);
             let base_response = `<b>${room_name}</b>\n\n${response}`;
@@ -102,6 +106,7 @@
         // Game state
         let currentRoom = 'start';
         let illuminated = false;
+        let verbose = false;
 
         const inventory = [];
 
@@ -110,6 +115,10 @@
             key: {
                 name: 'Rusty Key',
                 promptDescription: 'An old, rusty key with intricate engravings. Use it to unlock something.',
+            },
+            crystal_key: {
+                name: 'Crystal Key',
+                promptDescription: 'A key made of crystal that glows faintly in the dark.',
             },
             book: {
                 name: 'Mysterious Book',
@@ -131,41 +140,54 @@
             start: {
                 name: 'Dimly Lit Room', // 'Start'
                 promptDescription: "A dimly lit room with a musty smell. There's a door to the north and a window to the east.",
+                visited: true,
                 exits: { north: 'hallway', east: 'garden' }
             },
             hallway: {
                 name: 'Creepy Hallway',
+                visited: false,
                 promptDescription: "A long hallway with creaky floorboards. There's a door to the south and a staircase leading up.",
                 exits: { south: 'start', up: 'attic' },
                 items: ['rug']
             },
             garden: {
                 name: 'Overgrown Garden',
+                visited: false,
                 promptDescription: "An overgrown garden with various plants and flowers. There's a shed to the north and you can go back west.",
                 exits: { north: 'shed', west: 'start' },
-                items: ['key']
+                items: []
             },
             shed: {
                 name: 'Garden Shed',
+                visited: false,
                 promptDescription: "A small, wooden shed filled with old gardening tools and cobwebs.",
                 exits: { south: 'garden' },
-                items: ['lantern']
+                items: ['key']
             },
             attic: {
                 name: 'Dusty Attic',
+                visited: false,
                 promptDescription: "A dusty attic with slanted ceilings and a small, round window. There's a locked chest in the corner.",
                 exits: { down: 'hallway' },
                 locked: true,
-                items: ['book']
+                items: ['lantern']
             },
             basement: {
                 name: 'Dark Basement',
-                promptDescription: "A dark, damp basement with a musty smell. There's a flickering lightbulb overhead.",
+                visited: false,
+                promptDescription: "A dark, damp basement with a musty smell. The only light comes from the lamp in your hand.",
                 dark: true,
+                items: ['book'],
                 exits: { up: 'hallway' }
             }
         };
 
+        let playing = true;
+
+        function you_win() {
+            playing = false;
+            return "Congratulations! You found the hidden treasure and won the game!";
+        } 
 
         function getItemNames(roomObject){
 
@@ -179,7 +201,8 @@
         }
 
         // Game personality
-        const personality = "Use style: Dirk Gently's Holistic Detective Agency. Be concise."
+        const personality = "Use the style of the book Dirk Gently's Holistic Detective Agency. You are not Dirk, just using the books narrative style. Be concise."
+        const dark_prompt = "It's too dark to see anything. I hope you remember which way you came from. make a short witty crack at the adventurer's expense but keep it short and concise."
 
         // Game commands
         const commands = {
@@ -191,22 +214,47 @@
                     }
                     currentRoom = exits[direction];
                     let base_prompt = rooms[currentRoom].promptDescription;
+                    let item_names = getItemNames(rooms[currentRoom]);
                     if (rooms[currentRoom].dark && !illuminated) {
-                        base_prompt += " It's too dark to see anything.";
+                        base_prompt = dark_prompt;
+                        item_names = []; // Don't show items in dark rooms
                     }
-                    return generateRoomDescription(currentRoom, rooms[currentRoom].name, `Describe as if arriving as the scene is coming into view: ${base_prompt}. ${personality}`, getItemNames(rooms[currentRoom]));
+
+                    // break off short description if room has been visited
+                    short_description = rooms[currentRoom].visited ? "<b>" + rooms[currentRoom].name + "</b>\n\n" : "";
+                    rooms[currentRoom].visited = true;
+                    if (short_description.length > 0 && !verbose){
+                      return short_description
+                    }
+
+                    // return full description if verbose or room has not been visited
+                    return generateRoomDescription(currentRoom, rooms[currentRoom].name, `Describe as if arriving as the scene is coming into view: ${base_prompt}. ${personality}`, item_names);
                 } else {
                     return "You can't go that way.";
                 }
             },
             look: () => {
                 let base_prompt = rooms[currentRoom].promptDescription;
+                console.log(JSON.stringify({dark: rooms[currentRoom].dark, illuminated: illuminated}));
+                let item_names = getItemNames(rooms[currentRoom]);
                 if (rooms[currentRoom].dark && !illuminated) {
-                    base_prompt += " It's too dark to see anything.";
+                    base_prompt = dark_prompt;
+                    item_names = []; // Don't show items in dark rooms
                 }
-                return generateRoomDescription(currentRoom, rooms[currentRoom].name, `${base_prompt}. ${personality}`, getItemNames(rooms[currentRoom]))
+                return generateRoomDescription(currentRoom, rooms[currentRoom].name, `${base_prompt}. ${personality}`, item_names);
+            },
+            help: () => {
+                return `Object of the game: To get the secret treasure.\n\n Available commands: <b>go [direction]</b>, <b>look, examine [item]</b>, <b>take [item]</b>, <b>inventory</b>, <b>[some random other verbs] [object]</b>, <b>use [item]</b>, <b>verbose</b>. Many commands have shortcuts, try them out.`;
+
+            },
+            verbose:() => {
+                verbose = !verbose;
+                return verbose ? "Verbose mode enabled." : "Verbose mode disabled.";
             },
             examine: async (itemName) => {
+                if (rooms[currentRoom].dark && !illuminated) {
+                    return "It's too dark to see anything.";
+                }
                 const item = inventory.find(i => i.toLowerCase() === itemName.toLowerCase()) || 
                              (rooms[currentRoom].items && rooms[currentRoom].items.find(i => i.toLowerCase() === itemName.toLowerCase()));
                 if (item) {
@@ -216,6 +264,9 @@
                 }
             },
             take: (itemName) => {
+                if (rooms[currentRoom].dark && !illuminated) {
+                    return "It's too dark to see anything.";
+                }
                 const roomItems = rooms[currentRoom].items;
                 const item = roomItems && roomItems.find(i => i.toLowerCase() === itemName.toLowerCase());
                 if (item) {
@@ -255,6 +306,21 @@
                 if (item === 'key' && currentRoom === 'hallway') {
                     rooms.attic.locked = false;
                     return "You use the key to unlock the attic door.";
+                } else if (item === 'book') {
+                    const keyIndex = inventory.indexOf('crystal_key');
+                    console.log(`keyIndex: ${keyIndex}`);
+                    if(keyIndex === -1) {
+                        rooms[currentRoom].items = [...rooms[currentRoom].items, 'crystal_key'];
+                        return `You open the book and find a crystal key inside! ${commands.take('crystal_key')}`;
+                    }
+                    else
+                    {
+                        return "You open the book but find nothing else of interest.";
+                    }
+                }
+                else if (item === 'crystal_key' && currentRoom === 'attic'){
+                    rooms.attic.locked = false;
+                    return `You use the crystal key to unlock the chest. Inside, you find a map to a hidden treasure! ${you_win()}`; 
                 }
                 else {
                     return "You can't use that here.";
@@ -278,13 +344,20 @@
             [/steal\b/g, "take"],
             [/look at\b/g, "examine"],
             [/inspect\b/g, "examine"],
-            [/read\b/g, "examine"],
+            [/read\b/g, "use"],
             [/invent\b/g, "inventory"],
             [/lamp\b/g, "lantern"],
             [/the\b/g, ""],
             [/a\b/g, ""],
-            [/a\b/g, ""],
-    ];
+            [/an\b/g, ""],
+            [/to the\b/g, ""],
+            [/to\b/g, ""],
+            [/on the\b/g, ""],
+            [/up the\b/g, ""],
+            [/down the\b/g, ""],
+            [/crystal key\b/g, "crystal_key"],
+            [/unlock\s+\S+\s+with\b/g, "use"],
+        ];
 
         const ABBREV = {
             n: 'north',
@@ -302,6 +375,10 @@
 
         // Game logic
         async function processCommand(unaliased) {
+            if (!playing) {
+                return await generateOllamaResponse(`Poke light fun at the player, ${personality} The game is over. You won. Refresh the page to play again.`);
+            }
+
             input = unaliased.toLowerCase()
             for (const [alias, command] of ALIASES) {
                 input = input.replace(alias, command);
@@ -372,7 +449,11 @@
 
         // Initialize the game
         (async function() {
-            displayText("Welcome to the Text Adventure Game!");
+            
+            displayText('Welcome to the Text Adventure Game!\n\n');
+            generated_welcome = await generateOllamaResponse(`Short response. Welcome the adventurer! Do not ask any questions. Be Clever and Concise!\n\n${personality}`);
+            displayText(generated_welcome);
+            displayText('Type "help" for a list of commands.');
             const initialDescription = await generateRoomDescription(currentRoom, rooms[currentRoom].name, `${rooms[currentRoom].promptDescription}. ${personality}`);
             displayText(initialDescription);
         })();
