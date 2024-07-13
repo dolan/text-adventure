@@ -212,9 +212,46 @@
             }
         };
 
+        const DIRECTIONS = ['north', 'south', 'east', 'west', 'up', 'down', 'n', 's', 'e', 'w', 'u', 'd'];
+        const ABBREV = {
+            n: 'north',
+            s: 'south',
+            e: 'east',
+            w: 'west',
+            u: 'up',
+            d: 'down',
+            l: 'look',
+            i: 'inventory',
+            x: 'examine',
+            t: 'take',
+            g: 'go',
+        };
+
         // Game logic
         async function processCommand(input) {
-            const [command, ...args] = input.toLowerCase().split(' ');
+            const [initial_command, ...initial_args] = input.toLowerCase().split(' ');
+
+            if (DIRECTIONS.includes(initial_command)) {
+                command = 'go';
+                args = [initial_command];
+            } else if(initial_command == 'get') {
+                command = 'take';
+                args = initial_args;
+            }
+            else {
+                command = initial_command;
+                args = initial_args;
+            }
+
+            // check for abbreviations
+            if (ABBREV[command]) {
+                command = ABBREV[command];
+            }
+            // substitute abbreviations
+            args = args.map(arg => ABBREV[arg] || arg);
+
+            console.log(command, args);
+
             if (commands[command]) {
                 const result = await commands[command](...args);
                 return result;
