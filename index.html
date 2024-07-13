@@ -151,6 +151,7 @@
             },
             basement: {
                 promptDescription: "A dark, damp basement with a musty smell. There's a flickering lightbulb overhead.",
+                dark: true,
                 exits: { up: 'hallway' }
             }
         };
@@ -177,7 +178,7 @@
                         return "The attic door is locked. You need a key to unlock it.";
                     }
                     currentRoom = exits[direction];
-                    return generateRoomDescription(currentRoom, rooms[currentRoom].promptDescription, getItemNames(rooms[currentRoom]));
+                    return generateRoomDescription(currentRoom, `Describe as if arriving as the scene is coming into view: ${rooms[currentRoom].promptDescription}`, getItemNames(rooms[currentRoom]));
                 } else {
                     return "You can't go that way.";
                 }
