@@ -23,11 +23,15 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
         #text-pane {
-            height: 300px;
+            height: 600px;
             overflow-y: auto;
             border: 1px solid #ccc;
             padding: 10px;
             margin-bottom: 10px;
+
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
 
             /* make text wrap and respect line breaks */
             white-space: pre-wrap;
@@ -61,7 +65,7 @@
     <script>
         // Ollama API wrapper functions
         async function generateItemDescription(item) {
-            const prompt = `Briefly describe the item "${item}" briefly. The description should be in the second person, as if addressing the player directly. Keep it concise.`;
+            const prompt = `Briefly describe the item "${item}" briefly. ${personality}. The description should be in the second person, as if addressing the player directly. Keep it concise.`;
             return await generateOllamaResponse(prompt);
         }
 
@@ -139,13 +143,15 @@
         const rooms = {
             start: {
                 name: 'Dimly Lit Room', // 'Start'
-                promptDescription: "A dimly lit room with a musty smell. There's a door to the north and a window to the east.",
+                promptDescription: "A dimly lit room with a musty smell. There's a door to the north and an open floor-length window to the east.",
+                hint: "You can type 'go north' or 'go east' to move around. Type 'help' for a list of commands.",
                 visited: true,
                 exits: { north: 'hallway', east: 'garden' }
             },
             hallway: {
                 name: 'Creepy Hallway',
                 visited: false,
+                hint: "What do you have with you? Check your 'inventory'. Type 'help' for a list of commands.",
                 promptDescription: "A long hallway with creaky floorboards. There's a door to the south and a staircase leading up.",
                 exits: { south: 'start', up: 'attic' },
                 items: ['rug']
@@ -153,6 +159,7 @@
             garden: {
                 name: 'Overgrown Garden',
                 visited: false,
+                hint: "You can 'look' around to see what's here. Type 'help' for a list of commands.",
                 promptDescription: "An overgrown garden with various plants and flowers. There's a shed to the north and you can go back west.",
                 exits: { north: 'shed', west: 'start' },
                 items: []
@@ -160,6 +167,7 @@
             shed: {
                 name: 'Garden Shed',
                 visited: false,
+                hint: "You can 'take' items to add them to your inventory. Type 'help' for a list of commands.",
                 promptDescription: "A small, wooden shed filled with old gardening tools and cobwebs.",
                 exits: { south: 'garden' },
                 items: ['key']
@@ -167,6 +175,7 @@
             attic: {
                 name: 'Dusty Attic',
                 visited: false,
+                hint: "Not all items can be used where they are found. Type 'help' for a list of commands.",
                 promptDescription: "A dusty attic with slanted ceilings and a small, round window. There's a locked chest in the corner.",
                 exits: { down: 'hallway' },
                 locked: true,
@@ -175,6 +184,7 @@
             basement: {
                 name: 'Dark Basement',
                 visited: false,
+                hint: "Someone should turn on something useful. Type 'help' for a list of commands.",
                 promptDescription: "A dark, damp basement with a musty smell. The only light comes from the lamp in your hand.",
                 dark: true,
                 items: ['book'],
@@ -233,6 +243,9 @@
                     return "You can't go that way.";
                 }
             },
+            hint: () => {
+                return rooms[currentRoom].hint;
+            },
             look: () => {
                 let base_prompt = rooms[currentRoom].promptDescription;
                 console.log(JSON.stringify({dark: rooms[currentRoom].dark, illuminated: illuminated}));
@@ -245,7 +258,6 @@
             },
             help: () => {
                 return `Object of the game: To get the secret treasure.\n\n Available commands: <b>go [direction]</b>, <b>look, examine [item]</b>, <b>take [item]</b>, <b>inventory</b>, <b>[some random other verbs] [object]</b>, <b>use [item]</b>, <b>verbose</b>. Many commands have shortcuts, try them out.`;
-
             },
             verbose:() => {
                 verbose = !verbose;
@@ -300,7 +312,14 @@
                     items.lantern.lit = !items.lantern.lit;
                     illuminated = items.lantern.lit;
 
-                    return illuminated ? "The lantern casts a warm glow." : "You turn off the lantern.";
+                    base_text = illuminated ? "The lantern casts a warm glow." : "You turn off the lantern.";
+
+                    if (rooms[currentRoom].dark && illuminated) {
+                        return generateRoomDescription(currentRoom, rooms[currentRoom].name, `${rooms[currentRoom].promptDescription}. ${personality}`, getItemNames(rooms[currentRoom]));
+                    }
+
+                    return base_text;
+
                 }
                 else
                 if (item === 'key' && currentRoom === 'hallway') {
