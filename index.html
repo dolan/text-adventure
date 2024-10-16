@@ -248,7 +248,6 @@
             },
             look: () => {
                 let base_prompt = rooms[currentRoom].promptDescription;
-                console.log(JSON.stringify({dark: rooms[currentRoom].dark, illuminated: illuminated}));
                 let item_names = getItemNames(rooms[currentRoom]);
                 if (rooms[currentRoom].dark && !illuminated) {
                     base_prompt = dark_prompt;
@@ -327,7 +326,6 @@
                     return "You use the key to unlock the attic door.";
                 } else if (item === 'book') {
                     const keyIndex = inventory.indexOf('crystal_key');
-                    console.log(`keyIndex: ${keyIndex}`);
                     if(keyIndex === -1) {
                         rooms[currentRoom].items = [...rooms[currentRoom].items, 'crystal_key'];
                         return `You open the book and find a crystal key inside! ${commands.take('crystal_key')}`;
